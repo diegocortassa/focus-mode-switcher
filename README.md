@@ -14,7 +14,7 @@ This extension was created as a workaround for DCV viewer bug where, when opened
 ### Manual
 Download the latest release from [GitHub releases](https://github.com/dcvix/focus-mode-switcher/releases).
 ```shell
-gnome-extensions install focus-mode-switcher@cortassa.net-extension.zip
+gnome-extensions install focus-mode-switcher@cortassa.net.shell-extension.zip
 ```
 
 Once installed, the extension may not show up in the extensions list (especially with Wayland).
