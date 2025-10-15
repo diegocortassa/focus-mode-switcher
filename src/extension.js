@@ -30,6 +30,9 @@ class FocusModeSwitcherExtension {
         // Store the original focus-change-on-pointer-rest setting (this setting adds a delay to sloppy mode window activation)
         this._originalFocusChangeOnPointerRest = this._mutterSettings.get_boolean('focus-change-on-pointer-rest');
 
+        // Set focus-change-on-pointer-rest to false to disable focus delay
+        this._mutterSettings.set_boolean('focus-change-on-pointer-rest', false);
+
         // Monitor existing windows
         const windows = global.get_window_actors();
         windows.forEach(windowActor => {
@@ -42,8 +45,8 @@ class FocusModeSwitcherExtension {
         this._windowCreatedId = display.connect('window-created', (display, win) => {
             this._trackWindow(win);
         });
-        
-        log(`focus-mode-switcher v1 enabled`);
+
+        log(`focus-mode-switcher: enabled`);
     }
 
     disable() {
@@ -74,13 +77,15 @@ class FocusModeSwitcherExtension {
         }
 
         this._wmSettings = null;
-        this._mutterSettings == null;
+        this._mutterSettings = null;
         this._originalFocusMode = null;
 
-        log(`focus-mode-switcher v1 disabled`);
+        log(`focus-mode-switcher: disabled`);
     }
 
     _trackWindow(win) {
+
+        log(`focus-mode-switcher: Checking window: ${win.get_gtk_application_id()}`);
 
         if (!win || !this._isTargetWindow(win)) {
             return;
@@ -91,7 +96,7 @@ class FocusModeSwitcherExtension {
             return;
         }
 
-        log(`Tracking DCV window: ${win.get_gtk_application_id()}`);
+        log(`focus-mode-switcher: Tracking target app window: ${win.get_gtk_application_id()}`);
 
         const signalIds = [];
 
@@ -100,10 +105,10 @@ class FocusModeSwitcherExtension {
             const isFullscreen = win.is_fullscreen();
 
             if (isFullscreen) {
-                log(`DCV entered fullscreen - switching to sloppy mode`);
+                log(`focus-mode-switcher: target app entered fullscreen - switching to sloppy mode`);
                 this._wmSettings.set_string('focus-mode', 'sloppy');
             } else {
-                log(`DCV exited fullscreen - restoring original mode`);
+                log(`focus-mode-switcher: target app exited fullscreen - restoring original mode`);
                 this._wmSettings.set_string('focus-mode', this._originalFocusMode);
             }
         });
