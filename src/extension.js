@@ -1,6 +1,7 @@
 // extension.js
 import Gio from 'gi://Gio';
-
+import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
 
 export default class Extension {
     constructor(uuid) {
@@ -11,7 +12,7 @@ export default class Extension {
         this._originalFocusChangeOnPointerRest = null;
         this._windowTrackers = new Map();
         
-        this.TARGET_APP_ID = 'com.nicesoftware.DcvViewer';
+        this.TARGET_APP_ID = 'com.nicesoftware.DcvViewer.desktop';
     }
 
     enable() {
@@ -28,11 +29,11 @@ export default class Extension {
         // Store the original focus mode
         this._originalFocusMode = this._wmSettings.get_string('focus-mode');
 
-        // Set focus-change-on-pointer-rest to false to disable focus delay
-        this._mutterSettings.set_boolean('focus-change-on-pointer-rest', false);
-
         // Store the original focus-change-on-pointer-rest setting (this setting adds a delay to sloppy mode window activation)
         this._originalFocusChangeOnPointerRest = this._mutterSettings.get_boolean('focus-change-on-pointer-rest');
+
+        // Set focus-change-on-pointer-rest to false to disable focus delay
+        this._mutterSettings.set_boolean('focus-change-on-pointer-rest', false);
 
         // Monitor existing windows
         const windows = global.get_window_actors();
@@ -44,9 +45,14 @@ export default class Extension {
         // Monitor new windows being created
         const display = global.display;
         this._windowCreatedId = display.connect('window-created', (display, win) => {
-            this._trackWindow(win);
+
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+                this._trackWindow(win);
+                return GLib.SOURCE_REMOVE;
+            });
+
         });
-        
+
         log(`focus-mode-switcher: enabled`);
     }
 
@@ -86,8 +92,6 @@ export default class Extension {
 
     _trackWindow(win) {
 
-        log(`focus-mode-switcher: Checking window: ${win.get_gtk_application_id()}`);
-
         if (!win || !this._isTargetWindow(win)) {
             return;
         }
@@ -97,8 +101,6 @@ export default class Extension {
             return;
         }
 
-        log(`focus-mode-switcher: Tracking DCV window: ${win.get_gtk_application_id()}`);
-
         const signalIds = [];
 
         // Monitor fullscreen state changes
@@ -106,10 +108,20 @@ export default class Extension {
             const isFullscreen = win.is_fullscreen();
 
             if (isFullscreen) {
-                log(`focus-mode-switcher: DCV entered fullscreen - switching to sloppy mode`);
-                this._wmSettings.set_string('focus-mode', 'sloppy');
+
+                // Delay action to let DCV position windows on monitors
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+
+                    let app = getAppFromWindow(win) 
+                    if (appIsOnAllMonitors(app)){
+                        log(`focus-mode-switcher: target app entered fullscreen on all monitors, switching to sloppy mode`);
+                        this._wmSettings.set_string('focus-mode', 'sloppy');
+                    }
+                    return GLib.SOURCE_REMOVE;
+                });
+
             } else {
-                log(`focus-mode-switcher: DCV exited fullscreen - restoring original mode`);
+                log(`focus-mode-switcher: target app exited fullscreen - restoring original focus mode`);
                 this._wmSettings.set_string('focus-mode', this._originalFocusMode);
             }
         });
@@ -138,7 +150,45 @@ export default class Extension {
 
     _isTargetWindow(win) {
         if (!win) return false;
-        const appId = win.get_gtk_application_id();
+        const appId = getAppIDFromWindow(win);
         return appId === this.TARGET_APP_ID;
     }
+}
+
+function getAppFromWindow(window) {
+    let tracker = Shell.WindowTracker.get_default();
+    return tracker.get_window_app(window);
+}
+
+function getAppIDFromWindow(window) {
+    let app = getAppFromWindow(window)
+    return app.get_id();
+}
+
+function appIsOnAllMonitors(app) {
+    let windows = app.get_windows();
+    if (windows.length === 0) return false;
+    
+    let numMonitors = global.display.get_n_monitors();
+    
+    // Get unique monitor indices
+    let monitors = new Set();
+    windows.forEach(window => {
+        monitors.add(window.get_monitor());
+    });
+    
+    return monitors.size === numMonitors;
+}
+
+function appIsOnMultipleMonitors(app) {
+    let windows = app.get_windows();
+    if (windows.length === 0) return false;
+    
+    // Get unique monitor indices
+    let monitors = new Set();
+    windows.forEach(window => {
+        monitors.add(window.get_monitor());
+    });
+    
+    return monitors.size > 1;
 }
