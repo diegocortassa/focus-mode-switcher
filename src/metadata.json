@@ -3,14 +3,14 @@
   "name": "Focus Mode Switcher",
   "description": "Switches focus mode to sloppy when specific app go fullscreen",
     "shell-version": [
-    "40",
-    "41",
-    "42",
-    "43",
-    "44"
+    "45",
+    "46",
+    "47",
+    "48",
+    "49"
   ],
 
-  "version": 1,
+  "version": 2,
   "url": "https://github.com/diegocortassa/focus-mode-switcher",
-  "version-name": "40.0"
+  "version-name": "45.0"
 }

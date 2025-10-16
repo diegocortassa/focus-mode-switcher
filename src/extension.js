@@ -1,9 +1,10 @@
 // extension.js
-const { GLib, Gio, Meta, Shell } = imports.gi;
-const Main = imports.ui.main;
+import Gio from 'gi://Gio';
 
-class FocusModeSwitcherExtension {
-    constructor() {
+
+export default class Extension {
+    constructor(uuid) {
+        this._uuid = uuid;
         this._wmSettings = null;
         this._mutterSettings = null;
         this._originalFocusMode = null;
@@ -26,12 +27,12 @@ class FocusModeSwitcherExtension {
 
         // Store the original focus mode
         this._originalFocusMode = this._wmSettings.get_string('focus-mode');
-        
-        // Store the original focus-change-on-pointer-rest setting (this setting adds a delay to sloppy mode window activation)
-        this._originalFocusChangeOnPointerRest = this._mutterSettings.get_boolean('focus-change-on-pointer-rest');
 
         // Set focus-change-on-pointer-rest to false to disable focus delay
         this._mutterSettings.set_boolean('focus-change-on-pointer-rest', false);
+
+        // Store the original focus-change-on-pointer-rest setting (this setting adds a delay to sloppy mode window activation)
+        this._originalFocusChangeOnPointerRest = this._mutterSettings.get_boolean('focus-change-on-pointer-rest');
 
         // Monitor existing windows
         const windows = global.get_window_actors();
@@ -45,7 +46,7 @@ class FocusModeSwitcherExtension {
         this._windowCreatedId = display.connect('window-created', (display, win) => {
             this._trackWindow(win);
         });
-
+        
         log(`focus-mode-switcher: enabled`);
     }
 
@@ -96,7 +97,7 @@ class FocusModeSwitcherExtension {
             return;
         }
 
-        log(`focus-mode-switcher: Tracking target app window: ${win.get_gtk_application_id()}`);
+        log(`focus-mode-switcher: Tracking DCV window: ${win.get_gtk_application_id()}`);
 
         const signalIds = [];
 
@@ -105,10 +106,10 @@ class FocusModeSwitcherExtension {
             const isFullscreen = win.is_fullscreen();
 
             if (isFullscreen) {
-                log(`focus-mode-switcher: target app entered fullscreen - switching to sloppy mode`);
+                log(`focus-mode-switcher: DCV entered fullscreen - switching to sloppy mode`);
                 this._wmSettings.set_string('focus-mode', 'sloppy');
             } else {
-                log(`focus-mode-switcher: target app exited fullscreen - restoring original mode`);
+                log(`focus-mode-switcher: DCV exited fullscreen - restoring original mode`);
                 this._wmSettings.set_string('focus-mode', this._originalFocusMode);
             }
         });
@@ -139,23 +140,5 @@ class FocusModeSwitcherExtension {
         if (!win) return false;
         const appId = win.get_gtk_application_id();
         return appId === this.TARGET_APP_ID;
-    }
-}
-
-let extension = null;
-
-function init() {
-    return new FocusModeSwitcherExtension();
-}
-
-function enable() {
-    extension = init();
-    extension.enable();
-}
-
-function disable() {
-    if (extension) {
-        extension.disable();
-        extension = null;
     }
 }
