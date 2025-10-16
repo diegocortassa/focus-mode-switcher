@@ -10,7 +10,7 @@ class FocusModeSwitcherExtension {
         this._originalFocusChangeOnPointerRest = null;
         this._windowTrackers = new Map();
         
-        this.TARGET_APP_ID = 'com.nicesoftware.DcvViewer';
+        this.TARGET_APP_ID = 'com.nicesoftware.DcvViewer.desktop';
     }
 
     enable() {
@@ -26,7 +26,7 @@ class FocusModeSwitcherExtension {
 
         // Store the original focus mode
         this._originalFocusMode = this._wmSettings.get_string('focus-mode');
-        
+
         // Store the original focus-change-on-pointer-rest setting (this setting adds a delay to sloppy mode window activation)
         this._originalFocusChangeOnPointerRest = this._mutterSettings.get_boolean('focus-change-on-pointer-rest');
 
@@ -43,7 +43,12 @@ class FocusModeSwitcherExtension {
         // Monitor new windows being created
         const display = global.display;
         this._windowCreatedId = display.connect('window-created', (display, win) => {
-            this._trackWindow(win);
+
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+                this._trackWindow(win);
+                return GLib.SOURCE_REMOVE;
+            });
+
         });
 
         log(`focus-mode-switcher: enabled`);
@@ -85,8 +90,6 @@ class FocusModeSwitcherExtension {
 
     _trackWindow(win) {
 
-        log(`focus-mode-switcher: Checking window: ${win.get_gtk_application_id()}`);
-
         if (!win || !this._isTargetWindow(win)) {
             return;
         }
@@ -96,8 +99,6 @@ class FocusModeSwitcherExtension {
             return;
         }
 
-        log(`focus-mode-switcher: Tracking target app window: ${win.get_gtk_application_id()}`);
-
         const signalIds = [];
 
         // Monitor fullscreen state changes
@@ -105,10 +106,20 @@ class FocusModeSwitcherExtension {
             const isFullscreen = win.is_fullscreen();
 
             if (isFullscreen) {
-                log(`focus-mode-switcher: target app entered fullscreen - switching to sloppy mode`);
-                this._wmSettings.set_string('focus-mode', 'sloppy');
+
+                // Delay action to let DCV position windows on monitors
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+
+                    let app = getAppFromWindow(win) 
+                    if (appIsOnAllMonitors(app)){
+                        log(`focus-mode-switcher: target app entered fullscreen on all monitors, switching to sloppy mode`);
+                        this._wmSettings.set_string('focus-mode', 'sloppy');
+                    }
+                    return GLib.SOURCE_REMOVE;
+                });
+
             } else {
-                log(`focus-mode-switcher: target app exited fullscreen - restoring original mode`);
+                log(`focus-mode-switcher: target app exited fullscreen - restoring original focus mode`);
                 this._wmSettings.set_string('focus-mode', this._originalFocusMode);
             }
         });
@@ -137,9 +148,47 @@ class FocusModeSwitcherExtension {
 
     _isTargetWindow(win) {
         if (!win) return false;
-        const appId = win.get_gtk_application_id();
+        const appId = getAppIDFromWindow(win);
         return appId === this.TARGET_APP_ID;
     }
+}
+
+function getAppFromWindow(window) {
+    let tracker = Shell.WindowTracker.get_default();
+    return tracker.get_window_app(window);
+}
+
+function getAppIDFromWindow(window) {
+    let app = getAppFromWindow(window)
+    return app.get_id();
+}
+
+function appIsOnAllMonitors(app) {
+    let windows = app.get_windows();
+    if (windows.length === 0) return false;
+    
+    let numMonitors = global.display.get_n_monitors();
+    
+    // Get unique monitor indices
+    let monitors = new Set();
+    windows.forEach(window => {
+        monitors.add(window.get_monitor());
+    });
+    
+    return monitors.size === numMonitors;
+}
+
+function appIsOnMultipleMonitors(app) {
+    let windows = app.get_windows();
+    if (windows.length === 0) return false;
+    
+    // Get unique monitor indices
+    let monitors = new Set();
+    windows.forEach(window => {
+        monitors.add(window.get_monitor());
+    });
+    
+    return monitors.size > 1;
 }
 
 let extension = null;
